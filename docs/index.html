@@ -1,53 +1,63 @@
-     <meta charset="utf-8" emacsmode="-*- markdown -*-"><link rel="stylesheet" href="https://casual-effects.com/markdeep/latest/website.css?">
+     <meta charset="utf-8" emacsmode="-*- markdown -*-"><link rel="stylesheet" href="style.css?">
 
-                          **Cool Website**
+                          **Computer Graphics Summary**
 
-This is a sample style sheet for a website with a fixed menu on the left side of the screen and
-a banner at the top.
+Welcome to the Computer Graphics course summary! This guide provides an intuitive, high-level overview of the key concepts discussed in the Computer Graphics course taught by Prof. Dr. M. Gross & Dr. Marios Papas at ETH Zurich 2024 (https://cgl.ethz.ch/teaching/cg24/home.php).
+
+This summary was created by [Sven Pfiffner](https://github.com/SvenPfiffner) to prepare for the final exam and made available to the public with the hope that it will be useful to others. If you find any errors or have suggestions for improvement, please feel free to open an issue or pull request on the [GitHub repository](https://github.com/SvenPfiffner/ComputerGraphicsSummary). Please note that this page closely follows the material taught during the course and all credit for the underlying theory goes to Prof. Dr. M. Gross, Dr. Marios Papas, their team and the ETH Zurich.
 
 
-Features
+Quantities of light
 ==============================================================
-You could describe your product or project here. I'll instead 
-use a paraphrased excerpt from The Charter as a placeholder:
+**Flux** is a measure of how much light passes through a surface (or boundary) in a given amount of time. Imagine a bounding sphere around a lightbulb that emits equally in all directions. The light that passes through the sphere is the flux. We formalize flux as
+$$
+\Phi(A) \; \; \left[ \frac{J}{s} = W \right]
+$$
 
+<div style="text-align:center"><img src="graphs/flux.png" alt="Flux Visualization"></div>
 
-Attendu que le Canada est fondé sur des principes qui reconnaissent la suprématie de Dieu et la primauté du droit:
+**Irradiance** is a measure of how much power from light is recieved per unit area. Think of sunlight hitting your skin.
 
-*Garantie des droits et libertés*: 
-1. La Charte canadienne des droits et libertés garantit les droits et libertés qui y sont énoncés. Ils ne peuvent être restreints que par une règle de droit, dans des limites qui soient raisonnables et dont la justification puisse se démontrer dans le cadre d’une société libre et démocratique.
+- If you stand in direct sunlight, you feel more warmth because more light energy is hitting your skin per second $\rightarrow$ higher irradiance.
+- If you stand in the shade, you feel less warmth because less light energy is hitting your skin per second $\rightarrow$ lower irradiance.
+- If you use a magnifying glass to focus sunlight on your skin, you feel a burning sensation because the light energy is concentrated on a smaller area $\rightarrow$ higher irradiance.
 
-*Libertés fondamentales*:
-2. Chacun a les libertés fondamentales suivantes:
-  a) liberté de conscience et de religion;
-  b) liberté de pensée, de croyance, d’opinion et d’expression, y compris la liberté de la presse et des autres moyens de communication;
-  c) liberté de réunion pacifique;
-  d) liberté d’association.
+As irradiance is a measure of power per unit area, it essentially breaks down to flux per unit area and can thus be formalized as
+$$
+E(x) = \frac{d\Phi(A)}{dA} \; \; \left[ \frac{W}{m^2} \right]
+$$
 
-*Droits démocratiques*:
-3. Tout citoyen canadien a le droit de vote et est éligible aux élections législatives fédérales ou provinciales.
+<div style="text-align:center"><img src="graphs/irradiance.png" alt="Flux Visualization"></div>
 
-4. &nbsp;
-  1. Le mandat maximal de la Chambre des communes et des assemblées législatives est de cinq ans à compter de la date fixée pour le retour des brefs relatifs aux élections générales correspondantes. (81)
-  2. Le mandat de la Chambre des communes ou celui d’une assemblée législative peut être prolongé respectivement par le Parlement ou par la législature en question au-delà de cinq ans en cas de guerre, d’invasion ou d’insurrection, réelles ou appréhendées, pourvu que cette prolongation ne fasse pas l’objet d’une opposition exprimée par les voix de plus du tiers des députés de la Chambre des communes ou de l’assemblée législative. (82)
+**Radiosity** is a measure of how much power is emitted by a surface per unit area. As this is the inverse of irradiance, its formalization is equivalent. Think of a lightbulb emitting light in all directions. The radiosity is the power emitted by the lightbulb per unit area of the lightbulb's surface. We have
+$$
+B(x) = \frac{d\Phi(A)}{dA} \; \; \left[ \frac{W}{m^2} \right]
+$$
 
-5. Le Parlement et les législatures tiennent une séance au moins une fois tous les douze mois.
+**Radiant Intensity** is a measure of how much light is emitted in a given direction. It is the flux emitted by a light source per unit solid angle. It tells us how focused or spread out the light is. Think of the following example
 
-Team
-==============================================================
+- The sun emits a huge amount of power (flux), but it spreads in all directions, so the radiant intensity is moderate.
+- A laser pointer emits a small amount of power, but it is focused in a very narrow beam, so the radiant intensity is high.
 
-- CEO and Cofounder
-- CTO and Cofounder
-- Awesome Coders
-- Marketing Person
+We have
+$$
+I(\omega) = \frac{d\Phi(\omega)}{d\omega} \; \; \left[ \frac{W}{sr} \right]
+$$
 
-About
-==============================================================
+where $\omega$ is the solid angle of the beam.
 
-The faux-logo icon in the banner is from 
-[Freepik](https://www.freepik.com)
-and licensed under [CC 3.0 BY](http://creativecommons.org/licenses/by/3.0).
-Replace `website-banner.png` in the CSS file to replace it with your own.
+**Radiance** measures how much light travels in a specific direction from a specific surface area. It is the most fundamental quantity in computer graphics as it directly corresponds to what our eyes and cameras percieve as brightness. Think of the following
+
+- If you look directly into a flashlight, it appears very bright (high radiance).
+- If you look atht the beam from the side, it appears dimmer (lower radiance).
+- The flashlight still emits the same amount of light (flux does not change), but its brightness depends on the viewing angle.
+
+In other words, the radiance is radiant intensity weighted by the cosine of the angle between the direction of the light and the normal of the surface. We have
+$$
+L(x, \omega) = \frac{d^2\Phi(\omega)}{dA \cdot d\omega \cdot \cos(\theta)} \; \; \left[ \frac{W}{m^2 \cdot sr} \right]
+$$
+
+where $\theta$ is the angle between the normal of the surface and the direction of the light.
 
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
