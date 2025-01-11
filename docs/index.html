@@ -59,6 +59,57 @@ $$
 
 where $\theta$ is the angle between the normal of the surface and the direction of the light.
 
+Lamberts Cosine Law
+==============================================================
+
+Lamberts Cosine Law is a fundamental prinziple in computer graphics. It describes how light interacts with diffuse surfaces, which reflect light evenly in all directions.
+
+The brightness of a surface depends not only on the insensity of the light source but also on the angle at which the light hits the surface.
+
+- When light strikes a surface perpendicularly, it appears brightest.
+- When light hits at an angle, it spreads out over a larger area, making each small part of the surface recieve less light.
+- When light is at a grazing angle, the surface recieves very little light, making it appear darker.
+
+<div style="text-align:center"><img src="graphs/lamblaw.png" alt="Flux Visualization"></div>
+
+Shape Representation
+==============================================================
+
+## Parametric Representation
+Imagine you are drawing a curve on a piece of paper. One way to describe this curve is by listing a series of points $(x,y)$ that make up the curve. But what if you could describe the whole curve using just a single equation? This is where **parametric representations** come in.
+
+Instead of directly describing the curve as $y = f(x)$, we introduce an extra variable - let's call it $t$ (a parameter) - and define both $x$ and $y$ in terms of $t$:
+$$
+x = x(t), y = y(t)
+$$
+As $t$ changes, it traces out the curve. Think of $t$ as a slider that moves along the curve, generating points.
+
+In 3D, we can extend the idea further by using two parameters, $u$ and $v$, to define a **surface**:
+$$
+x = x(u,v), y = y(u,v), z = z(u,v)
+$$
+
+**Parametric Circle** is represented by the formula:
+$$
+p(t) = r(\cos(t), \sin(t)) \; \; t \in [0, 2\pi]
+$$
+
+<iframe src="graphs/parametric_circle_slider.html" height="200" width="300" title="Iframe Example"></iframe>
+
+**Parametric Sphere** is represented by the formula:
+$$
+p(u,v) = r(\cos(u)\cos(v), \sin(u)\cos(v), \sin(v)) \\
+(u,v) \in [0, 2\pi] \times [\frac{-\pi}{2}, \frac{\pi}{2}]
+$$
+
+## Implicit Representation
+Imagine you're trying to describe a circle on a piece of paper. One way is using the equation:
+$$
+x^2 + y^2 = r^2
+$$
+This equation doesn't give you individual points like parametric equations do. Instead, it defines a condition: any point $(x,y)$ that satisfies this equation lies on the circle.
+
+This is the essence of implicit representations - instead of describing how to move along a shape, we describe a rule that points must follow.
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
