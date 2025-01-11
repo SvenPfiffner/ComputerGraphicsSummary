@@ -169,6 +169,50 @@ We characterize a mesh with the following types of manifolds:
 ## Mesh Triangulation
 Triangulation is the process of dividing a polygon into triangles. This is important because many algorithms and rendering techniques work with triangles as the basic building block. Triangles are simple to work with and have nice properties like being planar and convex. Further, they always contain exactly 3 vertices and 3 edges, simplifying storage. 
 
+Appearance Modelling
+==============================================================
+Appearance modeling is about how objects look when light interacts with them. It helps create realistic digital images by defining how materials reflect, absorb, or scatter light.
+
+## BRDF
+A BRDF (Bidirectional Reflectance Distribution Function) is a mathematical function that describes how light is reflected at an opaque surface. The **reflection equation** is given by
+$$
+\int_{H^2} f_r(x, \omega_i, \omega_o) \cos(\theta_i) d\omega_i = L_o(x, \omega_o)
+$$
+
+Intuitively the reflection equation states that the light reflected in a specific direction $\omega_o$ from a point $x$ on a surface is the sum of the light reflected from all incoming directions $\omega_i$ weighted by the BRDF and the cosine of the angle between the normal of the surface and the incoming light. The integration volume $H^2$ is a hemisphere, thereby capturing all possible directions of incoming light above the surface.
+
+## Lambertian Diffuse BRDF
+The Lambertian BRDF is the simplest BRDF model and is used to describe perfectly diffuse surfaces. A lambertian reflection is isotropic, meaning it reflects light equally in all directions (the BRDF function is constant).
+We can deduce
+
+\begin{equation}
+    \begin{split}
+    L_o(x, \omega_o) &= \int_{H^2} f_r(x, \omega_i, \omega_o) \cos(\theta_i) d\omega_i \\
+                     & = \int_{H^2} f_r \cos(\theta_i) d\omega_i\\
+                     & = f_r \int_{H^2} \cos(\theta_i) d\omega_i\\
+                     & = f_r E(x)
+                        
+    \end{split}
+\end{equation}
+
+## Ideal Specular Reflection
+An ideal specular reflection can be understood intuitively by thinking about a perfect mirror. Imagine light rays hitting a perfect, smooth surface (like a mirror). These rays reflect off the surface in a single, well-defined direction, following **Snell's Law**:
+$$
+\theta_i = \theta_r
+$$
+which means that the **angle of incidence** $\theta_i$ is equal to the **angle of reflection** $\theta_r$. Since the surface is perfectly smooth, all rays that come in at a given angle will reflect in exactly the same direction, creating a sharp, clear reflection (in particular, there is no scattering).
+
+<iframe src="graphs/specular_reflection.html" height="200" width="300" title="Iframe Example"></iframe>
+
+## Ideal Specular Refraction
+Now imagine you are looking at a straw in a glass of water. The straw appears bent at the water's surface, even though it's actually straight. This bending effect happens because light changes direction when it moves from one medium to another
+(like from air to water). In **ideal specular refraction**, light passes through a perfectly smooth and transparent surface (like glass or water) without scattering. Instead, it follows Snell's Law, which dictates how much the light bends. We have:
+$$
+\eta_1 \sin(\theta_i) = \eta_2 \sin(\theta_t)
+$$
+where $\eta_1$ and $\eta_2$ are the refractive indices of the two media, $\theta_i$ is the angle of incidence, and $\theta_t$ is the angle of transmission.
+
+<iframe src="graphs/specular_refraction.html" height="200" width="300" title="Iframe Example"></iframe>
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
