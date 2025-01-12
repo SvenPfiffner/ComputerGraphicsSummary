@@ -289,6 +289,155 @@ $$
 ## Mesh Light
 A mesh light is a polygonal mesh that emits light. It is a versatile light source that can be used to create complex lighting effects. Mesh lights are useful for simulating objects like glowing screens, neon signs, or even entire buildings. The principles of foreshortening, visibility, and BRDFs still apply, but the radiant intensity is now distributed over the surface of the mesh and may be different at different points on the surface.
 
+Monte Carlo Integration
+==============================================================
+**Monte Carlo Integration** is a way to estimate an integral using random sampling. Instead of solving the integral mathematically, we take random points in a given region and check how many fall under the curve. As an intuitive example, imagine you want to find the area of an irregularly shaped pond. Instead of trying to measure it exactly, you throw a bunch of pebbles randomly over a large square that fully contains the pond. You then count how many pebbles land inside the pond versus the total pebbles thrown. Since you know the area of the square, you can estimate the ponds area using
+$$
+\text{Area of pond} = \frac{\text{Pebbles in pond}}{\text{Total pebbles}} \times \text{Area of square} 
+$$
+
+<iframe src="graphs/monte_carlo_pond.html" height="200" width="300" title="Iframe Example"></iframe>
+
+Lets now see how we can extend this idea to estimate the integral of a function $f(x)$ over a domain $D$. That is we want to compute
+$$
+\int_D f(x) dx
+$$
+Instead of directly solving this integral (which quickly becomes infeasible for high-dimensional functions), the integral is rewritten in terms of a probability density function $p(x)$, which describes the distribution of random samples over the domain $D$. The function $f(x)$ is divided by $p(x)$ to ensure that the expectation remains unbiased.
+$$
+\int_D f(x) dx = \int_D \frac{f(x)}{p(x)} p(x) dx
+$$
+
+The integral is then approximated by the average of the function values at the random samples. The more samples we take, the more accurate the estimate becomes. The Monte Carlo estimate is given by
+$$
+\int_D f(x) dx \approx \frac{1}{N} \sum_{i=1}^{N} \frac{f(x_i)}{p(x_i)}
+$$
+
+Note that this formulation is the exact same thing as we did previously with the pebbles. The function $f(x)$ is the height of the curve, $p(x)$ is the probability of a pebble landing at $x$, and the sum is the total number of pebbles in the pond (or in this case, under the curve).
+
+<iframe src="graphs/monte_carlo.html" height="200" width="300" title="Iframe Example"></iframe>
+
+The monte carlo estimator is unbiased and converges to the true value of the integral as the number of samples $N$ goes to infinity. The drawback is its convergence rate, which is $\mathcal{O}(1/\sqrt{N})$. This means that the error of the estimate decreases with the square root of the number of samples. In other words, to halve the error, you need to quadruple the number of samples.
+
+## Sampling arbitrary domain
+
+In practice, we often want to estimate integrals over complex domains that are not easy to sample uniformly. However, random samples are in general given by a uniform distribution over the interval $[0,1]$. To sample a more complex domain, we can use the following method:
+
+- We first sample $n$ random numbers $\xi_i \in [0,1]$, giving us a uniform sample in the unit hypercube with same dimension ($n$) as the target domain.
+- We determine a probability density function $p(x)$ that describes the distribution of points in the target domain.
+- Then, we choose a convenient parametrization of the target domain and relate the parametrization of the unit hypercube to the target domain via the jacobian method.
+- Next, we compute the cumulative distribution function (CDF) of our target distribution
+- We then invert the CDF to map the uniform sample to a sample from the target distribution.
+- Finally, we use the mapped sample to estimate the integral.
+
+This all sounds very abstract, so let's step through an example. Imagine we want to random sample a disk with radius $1$. Any point on that disk can be parametrized by two coordinates $(x,y)$. So our sample is two dimensional and we start with a two dimensional uniform sample $\xi = (\xi_1, \xi_2) \in [0,1]^2$. The disk has an area of $\pi$ so if we sample uniformly, each point in the disk has a probability of $\frac{1}{\pi}$ of being sampled.
+this gives us
+$$
+p(x, y) = \begin{cases} \frac{1}{\pi} & \text{if } x^2 + y^2 \leq 1 \\ 0 & \text{otherwise} \end{cases}
+$$
+As we are working with a disk, a parametrization in polar coordinates would be more convenient. We can simply map
+$$
+x = r \cos(\theta) \quad y = r \sin(\theta)
+$$
+Relating uniform cartesian $x,y$ to polar $r, \theta$ coordinates requires sampling from
+$$
+p_p(r, \theta) = \frac{r}{\pi}
+$$
+This result was obtained by applying the jacobian method and is described in detail in the next section.
+As a next step we need to compute the CDF functions for $r$ and $\theta$ and invert them to get the mapping from the uniform sample to the disk.
+We have
+
+\begin{equation}
+    \begin{split}
+    p(r) &= \int_0^{2\pi} p_p(r, \theta) d\theta \\
+           &= \int_0^{2\pi} \frac{r}{\pi} d\theta \\
+           &= \frac{r}{\pi} \int_0^{2\pi} d\theta \\
+           &= \frac{r}{\pi} \cdot 2\pi \\
+           &= 2r\\
+     P(r) &= \int_0^r 2r' dr' \\
+           &= r^2         
+    \end{split}
+\end{equation}
+
+and
+
+\begin{equation}
+    \begin{split}
+    p(\theta | r) &= \frac{p_p(r,\theta)}{p(r)} \\
+                    &= \frac{r}{\pi} \cdot \frac{1}{2r} \\
+                    &= \frac{1}{2\pi} \\
+     P(\theta | r) &= \int_0^{\theta} \frac{1}{2\pi} d\theta' \\
+                    &= \frac{\theta}{2\pi}
+\end{split}
+\end{equation}
+
+The inversion of the CDFs is then given by
+$$
+r = \sqrt{\xi_1} \quad \theta = 2\pi \xi_2
+$$
+and we can now sample the disk by mapping the uniform sample to the disk using these equations.
+
+<div style="text-align:center"><img src="graphs/disk_sampling.png" alt="Flux Visualization"></div>
+
+## Jacobian Method
+The **Jacobian method** is a way to transform probability distributions when you change variables. It helps you correctly adjust probabilities when switching from one set of variables to another.
+
+If you have a random variable $X$ with probability density function $p_X(x)$ and you want to transform it to a new random variable $Y = g(X)$, 
+then the probability density of $Y$, denoted $p_Y(y)$, is found using the Jacobian determinant. We have
+$$
+p_Y(y) = p_Y(T(x)) = \frac{p_X(x)}{|J_{T(x)}|}
+$$
+The intuition is as follows: the Jacobian determinant $|J_{T(x)}|$ tells you how much the volume changes when you switch from $X$ to $Y$. If the volume expands, the probability density decreases, and vice versa. Therefore, the jacobian adjusts the probability density to ensure the total probabiity remains $1$ after transformation.
+
+To show this technique in practice, we can consider the change of variables from cartesian to polar coordinates as it was used in the previous section. We have
+$$
+x = r \cos(\theta) \quad y = r \sin(\theta)
+$$
+
+The jacobian matrix is then given by
+$$
+J_T(r,\theta) = \begin{bmatrix} \frac{\delta x}{\delta r} & \frac{\delta x}{\delta \theta} \\ \frac{\delta y}{\delta r} & \frac{\delta y}{\delta \theta} \end{bmatrix} = \begin{bmatrix} cos(\theta) & -r sin(\theta) \\ sin(\theta) & r cos(\theta) \end{bmatrix}
+$$
+
+Thus, the the volume of the probability distribution changes by
+$$
+|J_T(r,\theta)| = r(cos^2(\theta) + sin^2(\theta)) = r
+$$
+
+and adjusting $p_p(r,\theta)$ to $p_c(x,y)$ requires dividing by the jacobian determinant. So
+$$
+p_c(x, y) = \frac{p_p(r,\theta)}{|J_T(r,\theta)|}
+$$
+
+And therefore
+$$
+p_p(r, \theta) = r \cdot p_c(x, y) = \frac{r}{\pi}
+$$
+
+## Multiple Importance Sampling
+When using Monte Carlo integration, variance is high when the PDF is not proportional to the integrand. This is because the samples are not distributed according to the integrand, leading to a high variance in the estimate. **Multiple Importance Sampling** is a technique to reduce this variance by combining multiple sampling strategies.
+The idea behind **Multiple Importance Sampling** is that if at least one sampling strategy covers each part of the integrand well, then combining them should reduce artifacts in renders. We can combine strategies by weighting each strategy by weights that sum to one. For the case of two strategies this means
+$$
+\langle F^{N_1 + N_2} \rangle = \frac{1}{N_1} \sum_{i=1}^{N_1} \frac{f(x_i)}{p(x_i)} w_1(x_i) + \frac{1}{N_2} \sum_{i=1}^{N_2} \frac{f(x_i)}{p(x_i)} w_2(x_i)
+$$
+
+where $w_1(x_i)$ and $w_2(x_i)$ are the weights for the two strategies and sum to $1$.
+The general case with $n$ strategies is given by
+$$
+\langle F^{N_1 + N_2 + \ldots + N_n} \rangle = \sum_{i=1}^{n} \frac{1}{N_i} \sum_{j=1}^{N_i} \frac{f(x_j)}{p(x_j)} w_i(x_j)
+$$
+with $\sum_{i=1}^{n} w_i(x_j) = 1$.
+
+Direct Illumination
+==============================================================
+Direct illumination refers to the light that reaches a surface directly from a light source without bouncing off any other objects. Imagine a flashlight shining on a wall in a dark room. The illuminated area recieves direct illumination, but the surrounding walls remain dark since no light bounces off to them.
+
+<div style="text-align:center"><img src="graphs/direct_illum.png" alt="Flux Visualization"></div>
+
+Global Illumination
+==============================================================
+Global illumination refers to the way light interacts with the entire scene, not just direct light from sources but also light that bounces off surfaces and contributes to the overall illumination. Imagine a sunny day inside a room. Even if the sunlight directly hits only one part of the floor, the entire room is stil somewhat lit because light bounces off the walls, ceiling, and furniture.
+
+<div style="text-align:center"><img src="graphs/global_illum.png" alt="Flux Visualization"></div>
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
