@@ -433,11 +433,61 @@ Direct illumination refers to the light that reaches a surface directly from a l
 
 <div style="text-align:center"><img src="graphs/direct_illum.png" alt="Flux Visualization"></div>
 
+To model direct illumination, we introduce the rendering equation, which is fundamental in coputer graphics for light transport modeling.
+
+The **Rendering Equation** describes the equilibrium of energy between emitted and reflected light at a given surface point.
+$$
+L_o(x, \omega_o) = L_e(x, \omega_o) + L_r(x, \omega_o) = L_e(x, \omega_o) + \int_{H^2} f_r(x, \omega_i, \omega_o) \cos(\theta_i) L_i(x, \omega_i) d\omega_i
+$$
+
+Intuitively, this formula states that the amount of light leaving a point $x$ in a direction $\omega_o$ ($L_o(x, \omega_o)$) equals the light emitted by the surface itself ($L_e(x, \omega_o)$) plus the light reflected from all incoming directions $\omega_i$ weighted by the BRDF $f_r(x, \omega_i, \omega_o)$ and the cosine of the angle between the normal of the surface and the incoming light. The integral is taken over the hemisphere $H^2$ to capture all possible incoming directions.
+
+As mentioned above, direct illumination only refers to the light that reaches a surface directly from a light source. Therefore, $L_i$ comes directly from an emitter, thus we have
+$$
+L_i(x, \omega_i) = L_e(r(x, \omega_i), -\omega_i)
+$$
+where $r(x, \omega_i)$ is the point on the light source that is visible from $x$ in the direction $\omega_i$ (we use the ray model discussed earlier here). Ignoring emitted light from non-light-emitting surfaces ($L_e = 0$), we obtain the hemispherical form for direct lighting
+$$
+L_r(x, \omega_o) = \int_{H^2} f_r(x, \omega_i, \omega_o) \cos(\theta_i) L_e(r(x, \omega_i), -\omega_i) d\omega_i
+$$
+Since direct integration over the hemisphere is computationally expensive, **Monte Carlo integration** is used for numerical estimation. Instead of sampling the entire hemisphere, we only sample from areas that recieve light. The idea for this is that a lot of the spherical direction are unlikely to hit a light and therefore would not contribute to the illumination. So we want to exclude them from the sampling. To do so, we integrate over surfaces of light emitters instead of the hemisphere. We introduce
+$$
+L_i(x, \omega_i) = L_i(x,y) \quad L_r(x, \omega_o) = L_r(x,z) \quad f_r(x, \omega_i, \omega_o) = f_r(x,y,z)
+$$
+and the integral becomes
+$$
+L_r(x, z) = \int_{A} f_r(x,y,z) \cos(\theta_i) L_i(x,y) G(x,y) dA
+$$
+where $G(x,y)$ is the geometry term that accounts for the attenuation of light between $x$ and $y$. E.g.
+$$
+G(x,y) = V(x,y)\frac{\cos(\theta_i) \cdot \cos(\theta_o)}{||x - y||^2}
+$$
+where $V(x,y)$ is the visibility function that checks if $x$ and $y$ are visible to each other. Intuitively, the geometry term covers distance based falloff $\frac{1}{||x - y||^2}$ and a term that models how efectively the light transfers due to surface orientations $|cos(\theta_i)||cos(\theta_o)|$
+
+<div style="text-align:center"><img src="graphs/hemi_vs_surface.png" alt="Flux Visualization"><br>*Difference between integration strategies. Source: Computer Graphics 2024, course slides (09-p.22)*</div>
+
 Global Illumination
 ==============================================================
 Global illumination refers to the way light interacts with the entire scene, not just direct light from sources but also light that bounces off surfaces and contributes to the overall illumination. Imagine a sunny day inside a room. Even if the sunlight directly hits only one part of the floor, the entire room is stil somewhat lit because light bounces off the walls, ceiling, and furniture.
 
 <div style="text-align:center"><img src="graphs/global_illum.png" alt="Flux Visualization"></div>
+
+In global illumination (contrary to direct illumination) we want to keep track of recursive ray paths, essentiallyl giving us a way to model the bouncing of light and therefore indirect illumination. We can model a light path as a chain of linear segments, joining at vertices that model the hit points of a ray.
+
+## Heckbert's Classification
+**Heckbert's Classification** is a model that classifies the hit events as follows:
+- $L$: A light source
+- $E$: An eye (camera)
+- $S$: A specular reflection
+- $D$: A diffuse reflection
+- $k+$: One or more bounces of type $k$
+- $k*$: Zero or more bounces of type $k$
+- $k?$: Zero or one bounce of type $k$
+- $(k|h)$: A bounce of type $k$ or $h$
+
+This gives us a framework to compactly reason about different types of light interactions in a scene. Some examples are:
+
+<div style="text-align:center"><img src="graphs/heckbert_examples.png" alt="Flux Visualization"></div>
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
