@@ -173,6 +173,8 @@ Appearance Modelling
 ==============================================================
 Appearance modeling is about how objects look when light interacts with them. It helps create realistic digital images by defining how materials reflect, absorb, or scatter light.
 
+<div style="text-align:center"><img src="graphs/appearance.png" alt="Flux Visualization"></div>
+
 ## BRDF
 A BRDF (Bidirectional Reflectance Distribution Function) is a mathematical function that describes how light is reflected at an opaque surface. The **reflection equation** is given by
 $$
@@ -213,6 +215,80 @@ $$
 where $\eta_1$ and $\eta_2$ are the refractive indices of the two media, $\theta_i$ is the angle of incidence, and $\theta_t$ is the angle of transmission.
 
 <iframe src="graphs/specular_refraction.html" height="200" width="300" title="Iframe Example"></iframe>
+
+## Microfacet BRDF
+Imagine looking at a rough, shiny surface like a frosted glass tabletop, brushed metal, or even human skin. The surface isn't a perfect mirror, but it still reflects light in a way that creates glossy highlights instead of a sharp, clear reflection.
+This happens because, at a microscopic level, the surface is made up of tiny facets - hence the term microfacet. Each of these microfacets are either specular or diffuse, but because they are oriented in many different directions, the overall reflections and refractions become more complex.
+
+<iframe src="graphs/microfacet_brdf.html" height="200" width="300" title="Iframe Example"></iframe>
+
+Let
+$$
+\omega_h = \frac{\omega_i + \omega_o}{||\omega_i + \omega_o||}
+$$
+be the so called **halfway vector** between the incoming and outgoing light directions. It is the direction in which the microfacets are oriented (the direction a perfect specular reflection would point towards). The microfacet reflection equation starts from the general BRDF definition
+$$
+f_r(\omega_i, \omega_o) = \frac{\text{Reflected Radiance}}{\text{Incoming Irradiance}}
+$$
+for the microfacet model, this becomes
+$$
+f_r(\omega_i, \omega_o) = \frac{\text{Energy reflected by microfacets oriented along }h}{\text{Incoming energy per unit area}}
+$$
+Since only facets aligned with the halfway vector $h$ contribute to the reflection, we can introduce the **microfacet distribution function** $D(h)$, which tells us the fraction of microfacets that have their normal aligned with $h$. 
+Now note that some microfacets may block incoming or outgoing light due to self-shadowing and masking. We can model this by the function $G(\omega_i, \omega_o)$. Finally we introduce the fresnel function $F(\omega_i, h)$, which tells us how much light is reflected at the interface between two media. The microfacet BRDF is then given by
+$$
+f_r(\omega_i, \omega_o) = \frac{D(h) \cdot G(\omega_i, \omega_o) \cdot F(\omega_i, h)}{4 \cdot \cos(\theta_i) \cdot \cos(\theta_o)}
+$$
+where the denominator is a scaling factor to ensure energy conservation.
+
+Sources of light
+==============================================================
+Light sources are objects in a scene that have the ability to emit light. They are essential for creating realistic and visually appealing computer graphics. Theoretically, any object that somehow emits light can be considered a light source. However, during the course, a variety of concrete examples were discussed.
+
+<div style="text-align:center"><img src="graphs/lights_compare.png" alt="Flux Visualization"></div>
+
+## Point Light
+A point light is like a tiny glowing dot in space - think of a light bulb or a distant star. It emits light equally in all directions, creating a spherical light spread. In computer graphics, point lights are useful for simulating small, localized light sources. Usually a point light is defined by a point in space $P$ and its emitted power (flux) $\Phi$.
+As the point light is isotropic, the radiant intensity is constant in all directions (the power per unit solid angle is constant). We have
+$$
+I(\omega) = \frac{\Phi}{4\pi}
+$$
+Now consider the irradiance at a point $x$ due to the point light at $P$. We are at a distance of $r = ||x - P||$ from the light source and the power is spread over a sphere of area $4\pi r^2$. The irradiance is then given by
+$$
+E(x) = \frac{I}{||x - P||^2} = \frac{\Phi}{4\pi ||x - P||^2}
+$$
+The radiance at $x$ in the direction $\omega$ is then determined by the BRDF $f_r(x,p,\omega)$ and the already discussed cosine term to capture foreshortening. We have
+\begin{equation}
+    \begin{split}
+    L_r(x, \omega) &= f_r(x,p,\omega) \cdot E(x) \cdot |\cos(\theta)| \\
+                   &= f_r(x,p,\omega) \cdot \frac{\Phi}{4\pi ||x - P||^2} \cdot |\cos(\theta)|
+                        
+    \end{split}
+\end{equation}
+To account for shadows, we introduce a visibility function $V(x,p)$, which is $1$ if the point $x$ is visible from the light source $p$ and $0$ otherwise. This gives us the final radiance equation for a point light with:
+$$
+L_r(x, \omega) = V(x,p) \cdot f_r(x,p,\omega) \cdot \frac{\Phi}{4\pi ||x - P||^2} \cdot |\cos(\theta)|
+$$
+
+## Spot Light
+A spot light is like a point light, but with a cone-shaped beam. It emits light in a specific direction, creating a focused, directional light spread. Spot lights are useful for simulating flashlights, car headlights, or stage lights. A spot light is defined by a point in space $P$, a direction $\omega_d$, a cutoff angle $\theta_c$, and a falloff exponent $n$. For the radiance of a spot light, we have
+$$
+L_r(x, \omega) = V(x,p) \cdot f_r(x,p,\omega) \cdot I(p,x) \cdot \frac{|cos(\theta)}{||x - p||^2}
+$$
+
+Thus, the radiance is almost the same as for a point light, with the exception that the isotropic intensity is replaced by a directional intensity $I(p,x)$, which is $0$ if the point $x$ is outside the cone of the spot light and decreases with the angle between the direction to $x$ and the direction of the spot light. The falloff exponent $n$ controls how quickly the intensity decreases with the angle.
+There is a multitude of ways how this can be modeled and there can be different approaches to the falloff function.
+
+## Directional Light
+A directional light is like sunlight - it comes from a faraway source and hits everything with (theoretically almost but modeled that way) parallel rays. Unlike other lights, a directional light has no specific position, just a direction. The radiance of a directional light is determined by
+the BRDF $f_r(x,p,\omega)$, a foreshortening term and the visibility function. As the radiosity of a directional light is constant along a certain direction, it is fully captured by a term $L_d(\omega)$ and we have
+$$
+L_r(x, \omega) = V(x,p) \cdot f_r(x,p,\omega) \cdot L_d(\omega) \cdot |\cos(\theta)|
+$$
+
+## Mesh Light
+A mesh light is a polygonal mesh that emits light. It is a versatile light source that can be used to create complex lighting effects. Mesh lights are useful for simulating objects like glowing screens, neon signs, or even entire buildings. The principles of foreshortening, visibility, and BRDFs still apply, but the radiant intensity is now distributed over the surface of the mesh and may be different at different points on the surface.
+
 
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
