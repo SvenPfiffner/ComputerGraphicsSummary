@@ -489,5 +489,197 @@ This gives us a framework to compactly reason about different types of light int
 
 <div style="text-align:center"><img src="graphs/heckbert_examples.png" alt="Flux Visualization"></div>
 
+## Ray Tracing
+Ray tracing is a Monte Carlo-based global illumination rendering algorithm used to simulate realistic lighting in computer graphics. It extends ray tracing by incorporating random sampling to model light transport accurately.
+The key steps of path tracing are as follows:
+
+- **Ray Generation**: A primary ray is shot from the camera through each pixel (there might be multiple rays per pixel) into the scene.
+- **Intersection**: The ray is tested for intersections with objects in the scene. If it hits an object, the intersection point is noted.
+- **BRDF Sampling**: At the intersection point, the BRDF is sampled to determine the direction of the next ray. There might be a reflection, refraction or absorption based on the materials BRDF function.
+- **Recursive Light Transport**: Instead of following a single deterministic path, multiple random rays are generated. Each new ray follows a random direction (according to the sampling properties of the BRDF). This process continues until a given termination condition is met.
+- **Radiance Accumulation**: Each sampled path contributes to the final pixel color. Many samples are averaged over time to reduce noise and converge to a realistic image.
+
+The number of bounces and the number of samples per pixel are parameters that can be adjusted to control the quality of the final image. More bounces and samples lead to a more accurate image but also increase the computational cost. Some comparisons can be seen in the following collage:
+
+<div style="text-align:center"><img src="graphs/num_of_rays.png" alt="Flux Visualization"><br>**Top-Left**: $1$ bounce and $10$ samples per pixel. One can clearly see that the low number of samples per pixel is not sufficient to model the true light distribution, which shows in a noisy image. Further, a single bounce yields a dark appearance for the wine glass as the ray chain is not long enough to refract through the medium. **Top-Right**: $5$ bounces and $10$ samples per pixel. The same noise issues as in the left image but the ray chain can fully refract through the glass. **Btm-Left**: $1$ bounce and $1000$ samples per pixel. The accumulation of samples is enough to approximate the true light distribution and almost no noise is visible, but the ray chain is not long enough to refract. **Btm-Right**: $5$ bounces and $1000$ samples per pixel. Both the light approximation and ray chain length is enough to capture the scene. There is no noise and the glass refracts correctly.</div>
+
+The general formulation of ray tracing as discussed above is given by
+$$
+L(x, \omega) = L_e(x, \omega) + L_d(x, \omega) + L_i(x, \omega)
+$$
+Intuitively, the estimated radiance at a point $x$ in the direction $\omega$ is the sum of the emitted radiance $L_e(x, \omega)$, the direct illumination $L_d(x, \omega)$, and the indirect illumination $L_i(x, \omega)$. So we sample direct illumination separately from indirect illumination. The reason why this is beneficial is that this way, we can sample
+emissive surfaces directly as briefly discussed in the chapter on direct illumination.
+
+There is one crucial downside to the standard raytracing formulation given above. The indirect illumination term $L_i(x, \omega)$ is recursive. We have
+$$
+L_i(x, \omega) = \sum_{i=1}^{N} f_r(x, \omega_i, \omega) \cos(\theta_i) L_i(x, \omega_i)
+$$
+so for sampling $N$ different paths at $x$ and $m$ bounces, we have a complexity of $\mathcal{O}(N^m)$. This is infeasible for high values of $m$ and $N$; especially as the recursion introduces a dependency and options for parallelization are limited. To mitigate this issue, we can use the **Path Tracing** approach.
+
+### The Path Tracing Algorithm
+The path tracing approach, contrary to the standard ray tracing approach, does not shoot $N$ rays at each hit location, but only $1$ ray. We have
+$$
+L(x, \omega) = L_e(x, \omega) + L_d(x, \omega) + \frac{L_i(x, \omega')}{p(\omega')}
+$$
+where $p(\omega')$ is the probability of sampling the direction $\omega'$. The idea is to sample the direction $\omega'$ according to the BRDF and then recursively evaluate the radiance at the hit location $x$ in the direction $\omega'$. You can think of ray tracing vs. path tracing as a depth-first search vs. a breadth-first search. The result is the same but the path tracing approach eliminates the recursive dependence and allows for more efficient parallelization.
+
+The last question we need to answer is how to stop the recursion. In the collage before we have seen that the required number of bounces to correctly capture a scene can vary depending on which materials are present. A fully diffuse scene might require less bounces than a scene with a lot of refracting materials. To account for this, we make the number
+of bounces per ray probabilistic. We can use a strategy called **Russian Roulette** which works as follows:
+- We define some probability of termination $p_{\text{terminate}} \in [0,1]$.
+- At each bounce, we sample a random number $\xi \in [0,1]$.
+- If $\xi < p_{\text{terminate}}$, we terminate the recursion.
+- Otherwise, we update the termination probability based on a heuristic we define and continue the recursion.
+
+The goal here is to update $p_{\text{terminate}}$ in a way that the probability of termination increases with the number of bounces. This way, we can terminate the recursion early for paths that do not contribute much to the final image.
+
+The russian roulette path tracing algorithm can be summarized in the following pseudocode (here under multiple importance sampling):
+
+```c++
+tracePath(x, w) {
+     Li = 0; t = 1; // Initial radiance and throughput
+     x = traceRay(x, w); //Trace camera ray
+     Li += Le(x); // If x on emissive surface
+
+     while (true) {
+          if (rand() < min(t, 0.99)) break; // Russian roulette
+          else t /= min(t, 0.99); // Update throughput
+
+          // Direct contribution from emitter
+          w_em, x_em = sample point on & dir to random emitter;
+          Li += weight_em * t * (w_em * x.normal) * BSDF(w_em) * L_e(x_em) / pdf_em(w_em)
+
+          // Direct contribution from material
+          w_mat = sample from BSDF at x;
+          x_mat = traceRay(x, w_mat);
+          Li += weight_mat * t * (w_mat * x.normal) * BSDF(w_mat) * L_e(x_mat) / pdf_mat(w_mat)
+
+          //trace continuation ray (indirect illumination)
+          w_i = sample from BSDF at x;
+          x = traceRay(x, w_i);
+          t *= BSDF(w_i) * (w_i * x.normal) / pdf(w_i);
+     } return Li;
+}
+```
+
+*The above code is cited from Computer Graphics 2024, slides - exercise 3, p.37*
+
+## Blocked & Progressive Path Tracing
+Blocked path tracing and progressive path tracing are two different approaches to rendering images using Monte Carlo path tracing. In blocked path tracing, the image is processed in sections (blocks), where each block is fully computed before moving on to the next. This method is efficient for parallel processing but does not provide a progressively improving preview of the entire image. In contrast, progressive path tracing computes the entire image simultaneously but refines it over multiple iterations.
+Initially, the image appears noisy, but as more samples are added, the quality gradually improves. Progressive path tracing is particularly useful for interactive rendering workflows, where users can observe the refinement of the image in real time​ (like the preview renders in blender).
+
+<div style="text-align:center"><img src="graphs/progr_block.png" alt="Flux Visualization">**Left**: Progressive Rendering, **Right**: Block Rendering</div>
+
+## Photon Mapping
+Photon mapping is a global illumination algorithm that uses a two-pass approach to simulate realistic lighting. It is based on the idea of tracing photons from light sources into the scene and then using these photons to estimate the radiance at each point in the scene. The two passes of this approach are summarised as follows:
+- **Pass 1** (Photon Tracing): Photons are emitted from light sources and traced through the scene. At each interaction, the photon is either absorbed, reflected, or refracted based on the material properties. The photons are stored in a data structure called the photon map.
+- **Pass 2** (Radiance Estimation): When tracing rays from the camera, the photon map is used to estimate the radiance at each point in the scene. The radiance is computed by finding the nearest photons to the hit point and using them to estimate the indirect illumination.
+
+Participating Media
+==============================================================
+Participating media refers to volumetric materials, such as fog, smoke, water, or clouds, that interact with light as it travels through them.
+Unlike traditional surface-based rendering, participating media requires modeling how light is absorbed, scattered, and sometimes emitted within a volume. Instead of explicitly modeling individual particles, these effects are represented statistically using coefficients for absorption, scattering, and phase functions, which describe the angular distribution of scattered light.
+Homogeneous media have uniform properties, while heterogeneous media vary spatially, often simulated using procedural noise or voxel grids. The key equation governing light transport in participating media is the Volume Rendering Equation, which accounts for radiance changes due to emission, absorption, and scattering. Advanced rendering techniques, such as ray marching, volumetric path tracing, and photon mapping, are used to accurately simulate these effects in realistic visual scenes​.
+
+## Homogeneous Media
+
+<div style="text-align:center"><img src="graphs/homogeneous.png" alt="Flux Visualization"></div>
+
+Homogeneous media is participating media where properties such as absorption, scattering, and emission coefficients remain constant throughout the volume. This simplifies calculations since the media’s behavior does not change with position. The transmittance $T(t)$ (the fraction of light that passes through the medium) is given by
+$$
+T(t) = e^{-\sigma_t t}
+$$
+where $\sigma_t = \sigma_a + \sigma_s$ is the extinction coefficient, the sum of the absorption $\sigma_a$ and scattering $\sigma_s$ coefficients. The radiance $L(t)$ along the ray is computed as
+$$
+L(t) = L_0 T(t) + \int_0^t T(s)\sigma_s L_s ds
+$$
+where $L_0$ is the incoming radiance, and $L_s$ is the source term due to in-scattering. In practice, rendering homogeneous media is implemented using ray marching, where the ray is sampled at discrete intervals, accumulating transmittance and scattering contributions. Monte Carlo integration can be used for efficient importance sampling. Since the medium is uniform, predomputed transmittance and analytical solutions are often used to optimize performance, making homogeneous media a simpler case compared to heterogeneous media.
+
+
+## Heterogeneous Media
+
+<div style="text-align:center"><img src="graphs/heterogeneous.png" alt="Flux Visualization"></div>
+
+Heterogeneous media is participating media where properties such as absorption ($\sigma_a$), scattering ($\sigma_s$), and phase function vary spatially, making light transport more complex. Unlike homogeneous media, where these properties remain constant, heterogeneous media requires evaluating the **Volume Rendering Equation** at varying points along the ray. The transmittance along a ray through a heterogeneous medium is computed as
+$$
+T(t) = e^{-\int_0^t \sigma_t(s) ds}
+$$
+where $\sigma_t(s)$ is a function of spatial position $s$. Because this integral does not have a closed form solution for arbitrary functions $\sigma_t(s)$, numerical methods like ray marching are used to approximate it by summing over discrete steps:
+$$
+T(t) \approx e^{-\sum_{i} \sigma_t(s_i) \Delta s}
+$$
+where $\Delta s$ is the step size along the ray. Heterogeneous media is often represented using voxel grids or procedural noise to model complex volumetric structures like clouds, smoke or fire.
+
+
+Camera Models
+==============================================================
+Camera models in computer graphics define how a scene is projected onto an image plane, simulating real-world cameras. The simplest model, the pinhole camera, assumes an infinitesimally small aperture that allows light rays to pass through a single point, producing a sharp image but suffering from low light capture. The thin-lens model refines this by introducing a finite aperture,
+allowing light to converge at a focal plane, thereby enabling effects like depth of field—where objects at different distances blur progressively based on the aperture size. Real-world imperfections such as chromatic aberration, vignetting, and radial distortion further influence the final image. Modern digital cameras also incorporate motion blur,
+simulating the integration of light over time due to exposure settings. These models not only help in rendering realistic images but also serve in computational photography and 3D reconstruction tasks​.
+
+## Depth of Field
+Depth of field is a photography term that describes the range of distances in an image that appear sharp. It is controlled by the aperture size, focal length, and distance to the subject. A large aperture (small f-number) results in a shallow depth of field, where only a small portion of the image is in focus. A small aperture (large f-number) increases the depth of field, making more of the image sharp.
+Let $c$ be the circle of confusion, which is the diameter of the blur spot on the image plane (the spot on the sensor caused by a cone of light rays not coming to perfect focus when imaging a point source). Further let $f$ be the focal length, $N$ the F-number (aperture size) and $u$ the distance to a subject. The depth of field is then given by
+$$
+DOF = \frac{2Ncu^2}{f^2}
+$$
+
+<iframe src="graphs/depth_of_field_plot.html" height="200" width="300" title="Iframe Example"></iframe>
+
+## Chromatic aberration
+Chromatic aberration is an optical distortion that occurs because the index of refraction of a lens varies with the wavelength of light. This results in different colors focusing at different depths, causing unwanted color fringes in images. There are two main types: longitudinal (axial) chromatic aberration,
+where different colors focus at varying distances along the optical axis, and lateral (transverse) chromatic aberration, where shorter wavelengths (e.g., blue) focus closer to the lens, making them appear smaller than longer wavelengths (e.g., red). This effect is especially visible in high-contrast areas of an image,
+causing color fringing around object edges.
+
+Inverse Rendering
+==============================================================
+
+## 3D Reconstruction
+3D reconstruction is the process of capturing the three-dimensional structure of an object or scene from two-dimensional images. To perform 3d reconstruction we propose the following pipeline:
+- **Keypoint detection and matching**: Identify significant feature points in images that are robust under different lighting and perspective changes. Match these keypoints across multiple images to find correspondences.
+- **Structure from motion (SfM)**: Use these keypoints correspondences to estimate the 3d structure of the scene. this process determines the camera positions and reconstructs a sparese 3D point cloud. The **RANSAC** algorithm is used to filter outliers and improve accuracy.
+- **Multi-view Stereopsis**: Enhances the sparese point cloud from SfM by using multiple images to generate a denser reconstruction. Creates depth information from multiple viewpoints.
+- **Point Cloud & Surface Reconstruction**: The dense point cloud is converted into a full 3D surface model. Further refinements can be applied, such as meshing and texturing.
+
+The aforementioned RANSAC algorithm can be inutitively explained as follows: Imagine you are trying to draw a straight line through a set of points, but some of the points are noisy or incorrect (outliers like the points we deal with in the above pipeline). The challenge is to find the best-fitting line without being misled by these incorrect points. The general RANSAC algorithm works as follows:
+- We first pick a few random points (just enough to define a model. E.g. 2 points for a line) and fit a model to them.
+- We then check how many other points fit the model within a certain threshold (inliers). We count the number of inliers and ignore the outliers.
+- We repeat this process multiple times and keep the model with the most inliers. This model is then re-estimated using all inliers to get the final model.
+
+## Textures from Images
+Assume we have a 3D model of an object but no texture information. We can use images of the object to extract texture information and apply it to the model. To do so, we would ideally extract a full texture spanning the whole UV map of the underlying object. However, images of objects usually suffer from occlusions. So certain parts of the object might not be visible in all images.
+
+<div style="text-align:center"><img src="graphs/raycasting_result.png" alt="Flux Visualization">An example of the textures from images process. Single images of bodies are mapped to the corresponding 3D representations UV maps to generate a UV texture. Multiple parts of the texture map remain empty due to occlusions.<br>*Image Source: Sven Pfiffner, Dr. Endri Dibra, Dr. Beren Kaul, Prof. Dr. Markus Gross, 2023, Reduced Reality Aesthetics, ETH Zurich*</div>
+
+To account for occlusions, we can formulate the problem as an optimization task. Assume we have an estimated pixel color $C(u,v)$ and $i$ images of the object from different angles. We can then define the optimization problem as
+$$
+\min_{C(u,v)} \sum_{i=1}^{n} \sum_{u,v} ||C(u,v) - C_i(u,v)||
+$$
+Note that we don't have the same values for all non-occluded positions throughout all images. For example, we might have more information in the image from certain viewing angles. For this, we introduce a general penalty $\lambda$, which takes the view-dependent effects into account. This yields:
+$$
+\min_{C(u,v)}  \lambda \sum_{i=1}^{n} ||C(u,v) - C_i(u,v)||
+$$
+
+Note that this approach generally requires multiple images of the object from different angles to capture the texture information accurately.
+
+## Image-Based Rendering
+Image-Based Rendering is a technique that synthesizes new views of a scene directly from images rather than relying on a fully reconstructed 3D model. It is particularly useful when traditional geometric modeling is dificult or impractical.
+
+In short: Traditional 3D graphics build models using geometry, textures, and lighting. IBR, however, captures real-world images and manipulates them to create new viewpoints.
+
+### Depth based Rendering
+Depth-Based Rendering (DBR) uses depth information to enhance image synthesis and rendering.
+Instead of fully reconstructing a 3D model, it relies on depth maps to generate new views. When rendering a new view using Depth-Based Rendering (DBR), we need to warp pixels based on depth information. This warping can be done in two main ways: Forward Mapping and Backward Mapping.
+These methods determine how we transform image pixels from one view to another.
+
+- **Forward Mapping**: In Forward Mapping, we start from the source image (original camera view) and push each pixel to  its new location in the target view. For this, we take each pixel from the source image and compute its new position in the target image using the depth map. We then "push" the pixel to its new location. If multiple pixels map to the same target pixel, we use blending or averaging to combine them.
+- **Backward Mapping**: In Backward Mapping, we start from the target image (new camera view) and pull pixels from the source image. For each pixel in the target image, we trace it backward to find where it came from in the source image. We sample the source image at that position. If the mapped position is not perfectly aligned with a pixel, we use interpolation to estimate the color.
+
+Forward Mapping | Backward Mapping 
+-------|------|----------
+ ✅ Direct Mapping: Each pixel is placed exactly where it should go.  |  ✅ No Gaps or Holes: Every pixel in the target image is filled.  
+ ✅ Efficient for small displacements: Works well if the viewpoint shift is minimal.   |  ✅ More Stable & Consistent: Ensures a smooth image without missing pixels. 
+ ❌ Holes & Gaps: Some pixels may leave empty spaces in the target image.  | ❌ Expensive to Compute: Requires finding the exactl location in the source image for every pixel.
+ ❌ Overlapping Pixels: Multiple source pixels may map to the same target pixel.  |  ❌ May Introduce Blurring: Since it interpolates between pixels, the image might lose sharpness.
+
 <style class="fallback">body{visibility:hidden}</style><script>markdeepOptions={tocStyle:'long'};</script>
 <!-- Markdeep: --><script src="https://casual-effects.com/markdeep/latest/markdeep.min.js?" charset="utf-8"></script>
